@@ -1,0 +1,10 @@
+{
+    "rules": {
+      "id-style": ["lowercase", {
+        "severity": "warning"
+      }],
+      "class-style": ["lowercase", {
+        "severity": "warning"
+      }]
+    }
+  }
