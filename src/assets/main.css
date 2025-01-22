@@ -40,14 +40,19 @@
   font-style: normal;
 }
 
+
+
 body {
   padding: 0;
   margin: 0;
   background-color: #f6f6f6;
 }
 
-body.modal-open {
-  overflow: hidden;
+@media (min-width: 1024px) {
+  body {
+    padding-top: 70px;
+    position: relative;
+  }
 }
 
 html,

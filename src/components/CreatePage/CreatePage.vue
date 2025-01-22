@@ -1,4 +1,12 @@
 <script>
+import router from "@/router/router";
+import {
+  fetchHouseById,
+  submitHouseForm,
+  uploadHouseImage,
+} from "@/services/api";
+import { validateField } from "@/services/validation";
+
 export default {
   data() {
     return {
@@ -28,20 +36,7 @@ export default {
     };
   },
   props: {
-    setPage: {
-      type: Function,
-      required: true,
-    },
-    editingItem: {
-      type: Object,
-      required: false,
-      default: null,
-    },
-    fetchData: {
-      type: Function,
-      required: true,
-    },
-    openCardPage: {
+    loadData: {
       type: Function,
       required: true,
     },
@@ -59,6 +54,7 @@ export default {
     },
     deleteImage() {
       this.previewUrl = null;
+      this.imageFile = null;
       this.$refs.fileInput.value = "";
     },
     toggleDown() {
@@ -74,207 +70,79 @@ export default {
       this.formData.hasGarage = option === "Yes";
     },
 
+    async loadEditingItem(id) {
+      try {
+        const result = await fetchHouseById(id);
+        this.formData = { ...result[0] };
+        this.previewUrl = result[0].image || null;
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
+    },
+
     async submitForm(event) {
       event.preventDefault();
-      Object.keys(this.formData.location).forEach((field) =>
-        this.validateField(field)
-      );
-      this.validateField("price");
-      this.validateField("size");
-      this.validateField("bedrooms");
-      this.validateField("bathrooms");
-      this.validateField("constructionYear");
-      this.validateField("description");
-      this.validateField("image");
-
-      if (Object.keys(this.formErrors).length > 0) {
-        return;
-      }
-
-      const form = this.formData;
-
-      const url =
-        this.editingItem && this.editingItem.id
-          ? `https://api.intern.d-tt.nl/api/houses/${this.editingItem.id}`
-          : "https://api.intern.d-tt.nl/api/houses";
 
       const formDataToSend = new FormData();
-      formDataToSend.append("price", form.price);
-      formDataToSend.append("bedrooms", form.rooms.bedrooms);
-      formDataToSend.append("bathrooms", form.rooms.bathrooms);
-      formDataToSend.append("size", form.size);
-      formDataToSend.append("streetName", form.location.street);
-      formDataToSend.append("houseNumber", form.location.houseNumber);
+      formDataToSend.append("price", this.formData.price);
+      formDataToSend.append("bedrooms", this.formData.rooms.bedrooms);
+      formDataToSend.append("bathrooms", this.formData.rooms.bathrooms);
+      formDataToSend.append("size", this.formData.size);
+      formDataToSend.append("streetName", this.formData.location.street);
+      formDataToSend.append("houseNumber", this.formData.location.houseNumber);
       formDataToSend.append(
         "numberAddition",
-        form.location.houseNumberAddition
+        this.formData.location.houseNumberAddition
       );
-      formDataToSend.append("zip", form.location.zip);
-      formDataToSend.append("city", form.location.city);
-      formDataToSend.append("constructionYear", form.constructionYear);
-      formDataToSend.append("hasGarage", form.hasGarage);
-      formDataToSend.append("description", form.description || "");
+      formDataToSend.append("zip", this.formData.location.zip);
+      formDataToSend.append("city", this.formData.location.city);
+      formDataToSend.append("constructionYear", this.formData.constructionYear);
+      formDataToSend.append("hasGarage", this.formData.hasGarage);
+      formDataToSend.append("description", this.formData.description || "");
+
+      let result = null;
 
       try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "X-Api-Key": "S3VWHc60pox_qMQyaR7FzeiYr9KmDBwP",
-          },
-          body: formDataToSend,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Error from server:", errorText);
-          throw new Error("Failed to submit form");
+        if (this.$route.query.id) {
+          await submitHouseForm(formDataToSend, { id: this.$route.query.id });
+          result = await fetchHouseById(this.$route.query.id);
+        } else {
+          result = await submitHouseForm(formDataToSend, null);
         }
-        const result =
-          this.editingItem && this.editingItem.id
-            ? this.editingItem
-            : await response.json();
 
-        if (this.imageFile) {
-          const uploadUrl = `https://api.intern.d-tt.nl/api/houses/${result.id}/upload`;
-
-          await this.uploadImage(uploadUrl, this.imageFile);
-          result.image = this.previewUrl;
+        if (Array.isArray(result) && result.length > 0) {
+          result = result[0];
         }
-        
-        this.fetchData();
-        this.openCardPage(result)
 
+        if (result && result.id && this.imageFile) {
+          await uploadHouseImage(result.id, this.imageFile);
+          result = await fetchHouseById(result.id);
+
+          if (Array.isArray(result) && result.length > 0) {
+            result = result[0];
+          }
+        }
+
+        if (!result || !result.location) {
+          console.error("Error: received invalid result object", result);
+          return;
+        }
+
+        await this.loadData();
+        router.push(`/card/${result.id}`);
       } catch (error) {
         console.error("Error submitting form:", error);
       }
     },
 
-    async uploadImage(url, file) {
-      try {
-        if (!file) {
-          throw new Error("No file provided for upload");
-        }
-
-        const formData = new FormData();
-        formData.append("image", file);
-
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "X-Api-Key": "S3VWHc60pox_qMQyaR7FzeiYr9KmDBwP",
-          },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          console.error("Error uploading image:", await response.text());
-          throw new Error("Failed to upload image");
-        }
-      } catch (error) {
-        console.error("Error in uploadImage:", error);
-        throw error;
-      }
-    },
-
     validateField(name) {
-      const errors = { ...this.formErrors };
+    const errors = validateField(name, this.formData);
+    this.formErrors = { ...this.formErrors, ...errors };
+  },
 
-      switch (name) {
-        case "street":
-          if (!this.formData.location.street) {
-            errors.street = "Street name is required.";
-          } else {
-            delete errors.street;
-          }
-          break;
-        case "houseNumber":
-          if (!this.formData.location.houseNumber) {
-            errors.houseNumber = "House number is required.";
-          } else {
-            delete errors.houseNumber;
-          }
-          break;
-        case "zip":
-          if (!this.formData.location.zip) {
-            errors.zip = "Postal code is required.";
-          } else {
-            delete errors.zip;
-          }
-          break;
-        case "city":
-          if (!this.formData.location.city) {
-            errors.city = "City is required.";
-          } else {
-            delete errors.city;
-          }
-          break;
-        case "price":
-          if (!this.formData.price || isNaN(this.formData.price)) {
-            errors.price = "Price must be a valid number.";
-          } else {
-            delete errors.price;
-          }
-          break;
-        case "size":
-          if (!this.formData.size || isNaN(this.formData.size)) {
-            errors.size = "Size must be a valid number.";
-          } else {
-            delete errors.size;
-          }
-          break;
-        case "bedrooms":
-          if (
-            !this.formData.rooms.bedrooms ||
-            isNaN(this.formData.rooms.bedrooms)
-          ) {
-            errors.bedrooms = "Bedrooms must be a valid number.";
-          } else {
-            delete errors.bedrooms;
-          }
-          break;
-        case "bathrooms":
-          if (
-            !this.formData.rooms.bathrooms ||
-            isNaN(this.formData.rooms.bathrooms)
-          ) {
-            errors.bathrooms = "Bathrooms must be a valid number.";
-          } else {
-            delete errors.bathrooms;
-          }
-          break;
-        case "constructionYear":
-          if (
-            !this.formData.constructionYear ||
-            isNaN(this.formData.constructionYear)
-          ) {
-            errors.constructionYear =
-              "Construction year must be a valid number.";
-          } else {
-            delete errors.constructionYear;
-          }
-          break;
-        case "description":
-          if (!this.formData.description) {
-            errors.description = "Description is required.";
-          } else {
-            delete errors.description;
-          }
-          break;
-        case "image":
-          if (!this.previewUrl) {
-            errors.image = "Image is required.";
-          } else {
-            delete errors.image;
-          }
-          break;
-      }
-
-      this.formErrors = errors;
-    },
     clearErrorOnInput(name) {
-      const errors = { ...this.formErrors };
-      delete errors[name];
-      this.formErrors = errors;
+      this.formErrors = { ...this.formErrors };
+      delete this.formErrors[name];
     },
   },
 
@@ -315,13 +183,11 @@ export default {
     },
   },
   mounted() {
-    document.addEventListener("mousedown", this.handleOutsideClick);
-    if (this.editingItem && this.editingItem.id) {
-      this.formData = {
-        ...this.editingItem,
-      };
-      this.previewUrl = this.editingItem.image || null;
+    const itemId = this.$route.query.id;
+    if (itemId) {
+      this.loadEditingItem(itemId);
     }
+    document.addEventListener("mousedown", this.handleOutsideClick);
   },
   beforeDestroy() {
     document.removeEventListener("mousedown", this.handleOutsideClick);
@@ -335,17 +201,16 @@ export default {
       <div class="container">
         <header>
           <div class="btn-div">
-            <button class="back-btn" v-on:click="setPage('home')">
+            <router-link to="/" class="back-btn">
               <img
                 src="../../assets/icons/ic_back_grey@3x.png"
                 alt="back-icon"
               />
-            </button>
-            <span class="btn-span" v-on:click="setPage('home')"
-              >Back to overview</span
-            >
+
+              <span class="btn-span">Back to overview</span>
+            </router-link>
           </div>
-          <h2 v-if="'id' in editingItem" class="title">Edit listing</h2>
+          <h2 v-if="$route.query.id" class="title">Edit listing</h2>
           <h2 v-else class="title">Create new listing</h2>
         </header>
         <form>
@@ -556,7 +421,7 @@ export default {
           </div>
 
           <button
-            v-if="editingItem && editingItem.id"
+            v-if="$route.query.id"
             class="bot-btn"
             v-on:click="submitForm"
             :disabled="!isFormValid"
@@ -578,281 +443,281 @@ export default {
 </template>
 
 <style scoped>
+.create-page {
+  background: url(../../assets/icons/img_background@3x.png);
+  background-size: cover;
+  height: 100%;
+  position: relative;
+  padding: 20px;
+  padding-bottom: 50px;
+  box-sizing: border-box;
+}
+
+.wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.back-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  position: absolute;
+  top: 20px;
+}
+
+.back-btn img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.btn-span {
+  display: none;
+}
+
+.title {
+  font-family: Montserrat-Bold;
+  font-size: 18px;
+  width: max-content;
+  margin: 0 auto;
+  margin-bottom: 15px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-file-div {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.upload-title {
+  font-size: 12px;
+  font-family: Montserrat-SemiBold;
+  color: #4a4b4c;
+}
+
+.upload-box {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 120px;
+  height: 120px;
+  border: 2px dashed #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-box:hover {
+  border-color: #007bff;
+}
+
+.plus-sign {
+  font-size: 36px;
+  color: #888;
+  pointer-events: none;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 43px;
+  left: 105px;
+  width: 25px;
+  height: 25px;
+  z-index: 1;
+  background: url(../../assets/icons/ic_clear_white@3x.png);
+  background-size: contain;
+  border: none;
+  cursor: pointer;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.input-div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#description {
+  height: 100px;
+  border-color: transparent;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 12px;
+  font-family: OpenSans-Regular;
+  color: #4a4b4c;
+  resize: none;
+}
+
+label {
+  font-size: 12px;
+  font-family: Montserrat-SemiBold;
+  color: #4a4b4c;
+}
+
+input {
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 12px;
+  font-family: OpenSans-Regular;
+  color: #4a4b4c;
+}
+
+.double-input {
+  display: flex;
+  gap: 8px;
+}
+
+.double-input .input-div {
+  width: 50%;
+}
+
+.select-div {
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 12px;
+  font-family: OpenSans-Regular;
+  color: #4a4b4c;
+  background-color: white;
+  position: relative;
+  cursor: pointer;
+}
+
+.input-value::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 25px;
+  height: 25px;
+  background-size: contain;
+  background-image: url(../../assets/icons/arrows.jpg);
+}
+
+.options {
+  border: none;
+  width: 100%;
+  position: absolute;
+  top: 40px;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.option {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: OpenSans-Regular;
+  color: #4a4b4c;
+  background-color: white;
+}
+
+.bot-btn {
+  margin: 20px 0;
+  padding: 10px;
+  background-color: #eb5440;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-family: Montserrat-SemiBold;
+  cursor: pointer;
+}
+
+.bot-btn:hover {
+  background-color: #db4b38;
+}
+
+.bot-btn:disabled {
+  cursor: not-allowed;
+  background-color: #dd7669;
+}
+
+.error {
+  font-size: 12px;
+  font-family: Montserrat-MediumItalic;
+  color: #eb5440;
+}
+
+.error-input {
+  border: 1px solid red !important;
+  outline: none;
+}
+
+@media (min-width: 1024px) {
   .create-page {
-    background: url(../../assets/icons/img_background@3x.png);
-    background-size: cover;
-    height: 100%;
-    position: relative;
-    padding: 20px;
-    padding-bottom: 50px;
-    box-sizing: border-box;
+    padding-bottom: 0;
   }
 
-  .wrapper {
-    max-width: 1200px;
-    margin: 0 auto;
+  header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 25px;
+    gap: 16px;
+  }
+
+  .container {
+    max-width: 400px;
   }
 
   .back-btn {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    position: absolute;
-    top: 20px;
+    position: static;
+    width: 25px;
   }
 
-  .back-btn img {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
+  .btn-div {
+    display: flex;
+    align-items: center;
+    gap: 16px;
   }
 
   .btn-span {
-    display: none;
+    display: block;
+    font-size: 14px;
+    font-family: Montserrat-SemiBold;
+    cursor: pointer;
   }
 
   .title {
-    font-family: Montserrat-Bold;
-    font-size: 18px;
-    width: max-content;
-    margin: 0 auto;
-    margin-bottom: 15px;
-  }
-
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .input-file-div {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .upload-title {
-    font-size: 12px;
-    font-family: Montserrat-SemiBold;
-    color: #4a4b4c;
-  }
-
-  .upload-box {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 120px;
-    height: 120px;
-    border: 2px dashed #ccc;
-    border-radius: 6px;
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .upload-box:hover {
-    border-color: #007bff;
-  }
-
-  .plus-sign {
-    font-size: 36px;
-    color: #888;
-    pointer-events: none;
-  }
-
-  .delete-btn {
-    position: absolute;
-    top: 43px;
-    left: 105px;
-    width: 25px;
-    height: 25px;
-    z-index: 1;
-    background: url(../../assets/icons/ic_clear_white@3x.png);
-    background-size: contain;
-    border: none;
-    cursor: pointer;
-  }
-
-  input[type="file"] {
-    display: none;
-  }
-
-  .preview-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: absolute;
-    top: 0;
-    left: 0;
-  }
-
-  .input-div {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  #description {
-    height: 100px;
-    border-color: transparent;
-    border-radius: 4px;
-    padding: 10px;
-    font-size: 12px;
-    font-family: OpenSans-Regular;
-    color: #4a4b4c;
-    resize: none;
+    display: block;
+    margin: 0;
+    font-size: 20px;
   }
 
   label {
-    font-size: 12px;
-    font-family: Montserrat-SemiBold;
-    color: #4a4b4c;
+    font-size: 14px;
   }
 
   input {
-    border: none;
-    border-radius: 4px;
-    padding: 10px;
-    font-size: 12px;
-    font-family: OpenSans-Regular;
-    color: #4a4b4c;
-  }
-
-  .double-input {
-    display: flex;
-    gap: 8px;
-  }
-
-  .double-input .input-div {
-    width: 50%;
-  }
-
-  .select-div {
-    border: none;
-    border-radius: 4px;
-    padding: 10px;
-    font-size: 12px;
-    font-family: OpenSans-Regular;
-    color: #4a4b4c;
-    background-color: white;
-    position: relative;
-    cursor: pointer;
-  }
-
-  .input-value::after {
-    content: "";
-    position: absolute;
-    top: 6px;
-    right: 10px;
-    width: 25px;
-    height: 25px;
-    background-size: contain;
-    background-image: url(../../assets/icons/arrows.jpg);
-  }
-
-  .options {
-    border: none;
-    width: 100%;
-    position: absolute;
-    top: 40px;
-    left: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .option {
-    cursor: pointer;
-    border-radius: 4px;
-    padding: 5px 10px;
-    font-size: 12px;
-    font-family: OpenSans-Regular;
-    color: #4a4b4c;
-    background-color: white;
-  }
-
-  .bot-btn {
-    margin: 20px 0;
-    padding: 10px;
-    background-color: #eb5440;
-    border: none;
-    border-radius: 4px;
-    color: white;
-    font-family: Montserrat-SemiBold;
-    cursor: pointer;
-  }
-
-  .bot-btn:hover {
-    background-color: #db4b38;
-  }
-
-  .bot-btn:disabled {
-    cursor: not-allowed;
-    background-color: #dd7669;
+    font-size: 14px;
   }
 
   .error {
-    font-size: 12px;
-    font-family: Montserrat-MediumItalic;
-    color: #eb5440;
+    font-size: 14px;
   }
-
-  .error-input {
-    border: 1px solid red !important;
-    outline: none;
-  }
-
-  @media (min-width: 1024px) {
-    .create-page {
-      padding-bottom: 0;
-    }
-
-    header {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 25px;
-      gap: 16px;
-    }
-
-    .container {
-      max-width: 400px;
-    }
-
-    .back-btn {
-      position: static;
-      width: 25px;
-    }
-
-    .btn-div {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .btn-span {
-      display: block;
-      font-size: 14px;
-      font-family: Montserrat-SemiBold;
-      cursor: pointer;
-    }
-
-    .title {
-      display: block;
-      margin: 0;
-      font-size: 20px;
-    }
-
-    label {
-      font-size: 14px;
-    }
-
-    input {
-      font-size: 14px;
-    }
-
-    .error {
-      font-size: 14px;
-    }
-  }
+}
 </style>

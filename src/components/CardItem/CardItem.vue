@@ -5,18 +5,15 @@ export default {
       type: Object,
       required: true,
     },
-    openCardPage: {
-      type: Function,
-      required: true,
-    },
-    createCard: {
-      type: Function,
-      required: true,
-    },
     openModalDelete: {
       type: Function,
       required: true,
-    }
+    },
+  },
+  methods: {
+    goToCardPage() {
+      this.$router.push(`/card/${this.item.id}`);
+    },
   },
   computed: {
     formatedSize: {
@@ -29,47 +26,56 @@ export default {
 </script>
 
 <template>
-  <div class="card-item">
-    <img
-      class="main-img"
-      :src="item.image"
-      alt="house-img"
-      v-on:click="() => openCardPage(item)"
-    />
-    <div class="card-info">
-      <div class="card-header">
-        <span class="title" v-on:click="() => openCardPage(item)">{{
-          item.location.street + " " + item.location.houseNumber
+    <div @click="goToCardPage" class="card-item">
+      <img class="main-img" :src="item.image" alt="house-img" />
+      <div class="card-info">
+        <div class="card-header">
+          <span class="title">{{
+            item.location.street + " " + item.location.houseNumber
+          }}</span>
+          <div class="buttons">
+            <router-link
+              class="card-btn"
+              v-show="item.id > 11"
+              :to="{
+                path: '/create',
+                query: {id: item.id}
+              }"
+            >
+              <img src="../../assets/icons/ic_edit@3x.png" alt="edit-icon" />
+            </router-link>
+            <button
+              class="card-btn"
+              v-show="item.id > 11"
+              v-on:click.stop="openModalDelete(item, $event)"
+            >
+              <img
+                src="../../assets/icons/ic_delete@3x.png"
+                alt="delete-icon"
+              />
+            </button>
+          </div>
+        </div>
+        <span class="price">€ {{ item.price }}</span>
+        <span class="address">{{
+          item.location.zip + " " + item.location.city
         }}</span>
-        <div class="buttons">
-          <button class="card-btn" v-show="item.id>11" v-on:click="() => createCard(item)">
-            <img src="../../assets/icons/ic_edit@3x.png" alt="edit-icon" />
-          </button>
-          <button class="card-btn" v-show="item.id>11" v-on:click="() => openModalDelete(item)">
-            <img src="../../assets/icons/ic_delete@3x.png" alt="delete-icon" />
-          </button>
-        </div>
-      </div>
-      <span class="price">€ {{ item.price }}</span>
-      <span class="address">{{
-        item.location.zip + " " + item.location.city
-      }}</span>
-      <div class="characteristics-group">
-        <div class="characteristic">
-          <img src="../../assets/icons/ic_bed@3x.png" alt="bed-icon" />
-          <span class="span">{{ item.rooms.bedrooms }}</span>
-        </div>
-        <div class="characteristic">
-          <img src="../../assets/icons/ic_bath@3x.png" alt="bath-icon" />
-          <span class="span">{{ item.rooms.bathrooms }}</span>
-        </div>
-        <div class="characteristic">
-          <img src="../../assets/icons/ic_size@3x.png" alt="size-icon" />
-          <span class="span">{{ formatedSize }}</span>
+        <div class="characteristics-group">
+          <div class="characteristic">
+            <img src="../../assets/icons/ic_bed@3x.png" alt="bed-icon" />
+            <span class="span">{{ item.rooms.bedrooms }}</span>
+          </div>
+          <div class="characteristic">
+            <img src="../../assets/icons/ic_bath@3x.png" alt="bath-icon" />
+            <span class="span">{{ item.rooms.bathrooms }}</span>
+          </div>
+          <div class="characteristic">
+            <img src="../../assets/icons/ic_size@3x.png" alt="size-icon" />
+            <span class="span">{{ formatedSize }}</span>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 </template>
 
 <style scoped>
@@ -79,13 +85,16 @@ export default {
   padding: 12px 8px;
   display: flex;
   gap: 10px;
+  cursor: pointer;
+  text-decoration: none;
 }
+
 .main-img {
+  min-width: 80px;
   width: 80px;
   height: 80px;
   object-fit: cover;
   border-radius: 4px;
-  cursor: pointer;
 }
 
 .card-info {
@@ -101,7 +110,6 @@ export default {
 
 .title {
   font-family: Montserrat-Bold;
-  cursor: pointer;
   font-size: 12px;
 }
 
@@ -148,7 +156,7 @@ export default {
   object-fit: contain;
 }
 
-.span {
+span {
   color: #4a4b4c;
   font-size: 12px;
   font-family: OpenSans-Regular;
@@ -160,6 +168,7 @@ export default {
     padding: 20px;
   }
   .main-img {
+    min-width: 120px;
     width: 120px;
     height: 120px;
   }
@@ -186,7 +195,7 @@ export default {
     margin-bottom: 12px;
   }
 
-  .span {
+  span {
     font-size: 16px;
   }
 

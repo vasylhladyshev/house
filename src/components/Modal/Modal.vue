@@ -1,27 +1,21 @@
 <script>
+import { deletePostById } from "@/services/api";
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 export default {
-  data() {
-    return {
-      isModalOpen: true, 
-    };
-  },
   props: {
     itemOnDelete: {
       type: Object,
       required: true,
     },
-    fetchData: {
+    closeModalDelete: {
       type: Function,
       required: true,
     },
-    closeModalDelete : {
+    loadData: {
       type: Function,
       required: true,
     },
-    setPage: {
-      type: Function,
-      required: true,
-    }
   },
 
   methods: {
@@ -31,42 +25,49 @@ export default {
         this.closeModalDelete();
       }
     },
-    
+  },
 
-    async deletePost() {
+  setup(props) {
+    const router = useRouter();
+    const modalContent = ref(null);
+
+    const deletePost = async () => {
       try {
-        const response = await fetch(
-          `https://api.intern.d-tt.nl/api/houses/${this.itemOnDelete.id}`,
-          {
-            method: "DELETE",
-            headers: {
-              "X-Api-Key": "S3VWHc60pox_qMQyaR7FzeiYr9KmDBwP",
-            },
-          }
-        );
-        if (!response.ok) {
-          const errorDetails = await response.text();
-          console.error("Local error:", errorDetails);
-        }
-        await this.fetchData();
-        this.closeModalDelete();
-        this.setPage('home')
+        await deletePostById(props.itemOnDelete.id);
+        await props.loadData();
+        props.closeModalDelete();
+        router.push("/");
       } catch (error) {
-        console.error("Error loading data:", error);
+        console.error("Error deleting post:", error);
       }
-    },
-  },
-  mounted() {
-    document.addEventListener("mousedown", this.handleOutsideClick);
-  },
-  beforeDestroy() { 
-    document.removeEventListener("mousedown", this.handleOutsideClick);
+    };
+
+    const handleOutsideClick = (event) => {
+      if (modalContent.value && !modalContent.value.contains(event.target)) {
+        props.closeModalDelete();
+      }
+    };
+
+    onMounted(() => {
+      document.body.style.overflow = "hidden";
+      document.addEventListener("mousedown", handleOutsideClick);
+    });
+
+    onBeforeUnmount(() => {
+      document.body.style.overflow = "auto";
+      document.removeEventListener("mousedown", handleOutsideClick);
+    });
+
+    return {
+      deletePost,
+      modalContent,
+    };
   },
 };
 </script>
 
 <template>
-  <div class="modal" >
+  <div class="modal">
     <div class="modal-content" ref="modalContent">
       <h2 class="title">Delete listing</h2>
       <div class="info">
